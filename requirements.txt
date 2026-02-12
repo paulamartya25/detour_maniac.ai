@@ -1,0 +1,6 @@
+streamlit
+langchain-groq
+langchain-community
+langchain-core
+duckduckgo-search
+geopy
