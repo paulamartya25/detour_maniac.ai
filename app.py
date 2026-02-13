@@ -152,7 +152,7 @@ with st.sidebar:
 # --- 6. MAIN APP LOGIC ---
 
 # Title & Quote
-st.markdown("<h1 class='main-title'>DETOUR_MANIAX</h1>", unsafe_allow_html=True)
+st.markdown("<h1 class='main-title'>detour_maniac.ai</h1>", unsafe_allow_html=True)
 st.markdown(f"<p class='quote-text'>{get_travel_quote()}</p>", unsafe_allow_html=True)
 
 if city:
@@ -205,7 +205,7 @@ if city:
                 st.markdown('</div>', unsafe_allow_html=True)
                 
                 # Stats
-                st.caption(f"Search powered by Groq (Llama 3.3) • Used {cb.total_tokens} tokens")
+                st.caption(f"We hope your trip becomes a memorable one..")
 
         except Exception as e:
             if "429" in str(e):
