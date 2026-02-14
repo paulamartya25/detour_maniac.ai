@@ -1,4 +1,5 @@
-# 🌊 DETOUR_MANIAX
+# 🌊 detour_maniac.ai
+
 
 **Your AI-Powered Luxury Travel Concierge**
 
