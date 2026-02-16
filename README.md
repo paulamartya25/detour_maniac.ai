@@ -12,7 +12,7 @@
 
 ## 🚀 Overview
 
-**DETOUR_MANIAX** is a next-generation travel planning application designed to take the stress out of trip planning. Powered by the blazing-fast **Llama 3.3** model on **Groq** and orchestrated by **LangChain**, this agentic AI creates personalized, 3-section travel itineraries in seconds.
+**detour_maniac.ai** is a next-generation travel planning application designed to take the stress out of trip planning. Powered by the blazing-fast **Llama 3.3** model on **Groq** and orchestrated by **LangChain**, this agentic AI creates personalized, 3-section travel itineraries in seconds.
 
 Unlike standard chatbots, Detour Maniax uses **live web search tools** to fetch real-time hotel prices, tourist spots, and estimated travel costs, ensuring your plan is grounded in reality, not just hallucination.
 
