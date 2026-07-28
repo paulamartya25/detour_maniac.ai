@@ -25,6 +25,16 @@ get_browser_location = components.declare_component(
 WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 NOMINATIM_API = "https://nominatim.openstreetmap.org/search"
 MAX_ATTRACTION_DISTANCE_KM = 45
+NON_ATTRACTION_CATEGORY_HINTS = (
+    "annual event", "recurring event", "book fair", "festival", "conference", "trade fair",
+)
+ATTRACTION_CATEGORY_HINTS = (
+    "tourist attraction", "museum", "gallery", "park", "garden", "zoo",
+    "monument", "memorial", "palace", "castle", "church", "cathedral",
+    "temple", "mosque", "synagogue", "opera", "theatre", "theater", "tower",
+    "bridge", "market", "square", "historic", "heritage", "fort", "fortress",
+    "beach", "lake", "waterfall", "forest", "observatory", "aquarium", "amusement",
+)
 ROTATION_MS = 4000
 FALLBACK_IMAGE = "https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1400&q=85"
 LUXURY_SLOGANS = (
@@ -115,6 +125,15 @@ def destination_coordinates(city: str) -> dict | None:
         return None
 
 
+def is_likely_attraction(page: dict) -> bool:
+    """Keep only Wikipedia pages that are classified like a visitor attraction."""
+    category_text = " ".join(
+        category.get("title", "").replace("Category:", "").lower()
+        for category in page.get("categories", [])
+    )
+    return (not any(hint in category_text for hint in NON_ATTRACTION_CATEGORY_HINTS) and any(hint in category_text for hint in ATTRACTION_CATEGORY_HINTS))
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def attractions_for(city: str) -> list[dict]:
     """Return only Wikipedia attractions that are geographically near the requested city."""
@@ -125,7 +144,7 @@ def attractions_for(city: str) -> list[dict]:
     params = {
         "action": "query", "format": "json", "generator": "search",
         "gsrsearch": f"tourist attractions in {city}", "gsrnamespace": 0, "gsrlimit": 20,
-        "prop": "pageimages|extracts|coordinates|pageprops", "piprop": "thumbnail",
+        "prop": "pageimages|extracts|coordinates|pageprops|categories", "cllimit": "max", "piprop": "thumbnail",
         "pithumbsize": 1400, "exintro": 1, "explaintext": 1, "exsentences": 2,
     }
     try:
@@ -148,7 +167,7 @@ def attractions_for(city: str) -> list[dict]:
         name = page.get("title", "").strip()
         description = page.get("extract", "").strip()
         coordinate = page.get("coordinates", [{}])[0]
-        if not name or not description or " ".join(name.lower().split()) == requested_name:
+        if (not name or not description or " ".join(name.lower().split()) == requested_name or not is_likely_attraction(page)):
             continue
         try:
             lat, lon = float(coordinate["lat"]), float(coordinate["lon"])
