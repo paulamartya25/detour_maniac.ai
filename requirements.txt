@@ -5,3 +5,4 @@ langchain-community
 langchain-core
 duckduckgo-search
 geopy
+requests
