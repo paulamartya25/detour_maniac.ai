@@ -10,9 +10,9 @@ The app has been redesigned around a clean "Trip Settings" workflow: set your de
 
 ✨ Key Features
 🧭 Guided Trip Settings: A dedicated sidebar to configure destination, number of travelers, rooms required, check-in date, trip duration, and target rate per room (INR) via an intuitive slider.
-🌍 Smart Itinerary Generation: Automatically generates a structured plan including:
-Top Places to Visit: Curated, verified attractions (monuments, cathedrals, parks, and more) with descriptive context.
-Recommended Hotels: Real-time search for hotels within your specified budget range.
+🌍 Smart Itinerary Generation: Automatically generates a structured travel plan.
+📍 Top Places to Visit: Curated, verified attractions (monuments, cathedrals, parks, and more) with descriptive context.
+🏨 Recommended Hotels: Real-time search for hotels within your specified budget range.
 💰 Total Cost Breakdown: A mathematical estimate covering hotels, food, and local travel.
 ✅ Verified Attractions: Each recommended spot is tagged as a "Verified Attraction" and comes with a short, sourced description rather than a generic blurb.
 ⚡ Blazing Fast Inference: Built on Groq's LPU Engine, delivering results at 300+ tokens/second.
@@ -57,3 +57,14 @@ Enter your destination, number of travelers, and rooms required.
 Pick your check-in date and trip duration (in nights).
 Set your target rate per room/night (INR) using the slider.
 Click generate and let detour_maniac.ai build your itinerary — complete with verified attractions, hotel picks, and a full cost breakdown.
+📸 Screenshots
+Destination Edit	Verified Attraction
+Trip settings sidebar with the "Explore Prayagraj" destination edit panel	Detail card for a verified nearby attraction with description
+
+(Replace the screenshot URLs at the top of this file with the hosted image links once uploaded to GitHub.)
+
+🗺️ Roadmap
+ Multi-city trip support
+ Downloadable PDF itinerary export
+ Currency conversion for international trips
+ User accounts to save past itineraries
