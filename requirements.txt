@@ -6,3 +6,4 @@ langchain-core
 duckduckgo-search
 geopy
 requests
+ddgs
