@@ -7,3 +7,5 @@ duckduckgo-search
 geopy
 requests
 ddgs
+
+pandas

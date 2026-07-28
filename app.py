@@ -2,8 +2,10 @@ import html
 import json
 import math
 import os
+import time
 from pathlib import Path
 
+import pandas as pd
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
@@ -84,28 +86,58 @@ def attractions_for(city: str) -> list[dict]:
     return places[:6]
 
 
-def carousel(city: str, places: list[dict]) -> None:
+@st.fragment(run_every="4s")
+def attraction_background(city: str, places: list[dict]) -> None:
+    """Rotate the selected destination's attraction images as the app background."""
     if not places:
         st.info(f"Attraction photos for {city} are temporarily unavailable. Your itinerary can still be generated.")
         return
-    slides = [{"name": p["name"], "description": p["description"], "image": p["image"] or FALLBACK_IMAGE} for p in places]
-    data = json.dumps(slides).replace("</", "<\\/")
-    safe_city = html.escape(city)
-    components.html(f"""
-    <style>
-    *{{box-sizing:border-box}}body{{margin:0;font-family:Arial}}.box{{height:410px;overflow:hidden;position:relative;border-radius:18px;background:#06324c}}img{{width:100%;height:100%;object-fit:cover;transition:opacity .4s}}img.f{{opacity:.2}}.shade{{position:absolute;inset:0;background:linear-gradient(90deg,#001827c7,#00182708)}}
-    .copy{{position:absolute;left:32px;right:32px;bottom:30px;max-width:700px}}.small{{color:#b9efff;letter-spacing:1.5px;font-weight:bold;font-size:12px}}h2,p{{color:#fff}}h2{{font-size:32px;margin:8px 0}}p{{line-height:1.45}}.dots{{position:absolute;right:22px;bottom:15px;display:flex;gap:6px}}i{{width:9px;height:9px;border-radius:9px;background:#ffffff88}}i.on{{width:22px;background:white}}
-    </style>
-    <div class="box" aria-label="Rotating tourist attractions in {safe_city}"><img id="photo" alt="Tourist attraction"><div class="shade"></div><div class="copy"><span class="small">DISCOVER {safe_city}</span><h2 id="name"></h2><p id="description"></p></div><div id="dots" class="dots"></div></div>
-    <script>
-    const slides={data},photo=document.getElementById("photo"),name=document.getElementById("name"),description=document.getElementById("description"),dots=document.getElementById("dots");let active=0;
-    slides.forEach(()=>{{let dot=document.createElement("i");dots.appendChild(dot)}});
-    function show(n,first=false){{let item=slides[n];if(!first)photo.classList.add("f");setTimeout(()=>{{photo.src=item.image;photo.alt=item.name;name.textContent=item.name;description.textContent=item.description;[...dots.children].forEach((dot,i)=>dot.classList.toggle("on",i===n));photo.classList.remove("f")}},first?0:200)}}
-    show(active,true);setInterval(()=>{{active=(active+1)%slides.length;show(active)}},{ROTATION_MS});
-    </script>
-    """, height=425, scrolling=False)
-    st.caption("Attraction preview changes automatically every 4 seconds. Photos and summaries are sourced from Wikipedia when available.")
 
+    current_index = int(time.time() // (ROTATION_MS / 1000)) % len(places)
+    current = places[current_index]
+    image_url = html.escape(current["image"] or FALLBACK_IMAGE, quote=True)
+    attraction_name = html.escape(current["name"])
+    summary = html.escape(" ".join(current["description"].split())[:320])
+
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-image: linear-gradient(rgba(0, 16, 32, .50), rgba(0, 16, 32, .55)), url("{image_url}") !important;
+            background-position: center !important;
+            background-size: cover !important;
+            background-attachment: fixed !important;
+        }}
+        .destination-attraction {{
+            background: rgba(3, 20, 34, .76);
+            border: 1px solid rgba(210, 245, 255, .45);
+            border-radius: 18px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, .26);
+            color: white !important;
+            margin: 0 0 1rem;
+            padding: 1.25rem 1.5rem;
+        }}
+        .destination-attraction * {{ color: white !important; }}
+        .destination-attraction .eyebrow {{
+            color: #b9efff !important;
+            font-size: .8rem;
+            font-weight: 700;
+            letter-spacing: .12rem;
+            margin: 0 0 .35rem;
+            text-transform: uppercase;
+        }}
+        .destination-attraction h2 {{ font-size: 1.8rem; margin: 0 0 .45rem; }}
+        .destination-attraction p {{ line-height: 1.5; margin: 0; }}
+        </style>
+        <section class="destination-attraction">
+          <p class="eyebrow">Now showing: {html.escape(city)}</p>
+          <h2>{attraction_name}</h2>
+          <p>{summary}</p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("The attraction photo in the background changes automatically every 4 seconds.")
 
 def distance_km(lat1, lon1, lat2, lon2):
     a = math.sin(math.radians(lat2-lat1)/2)**2
@@ -128,7 +160,7 @@ def parse_location(value):
     return {"lat": lat, "lon": lon} if -90 <= lat <= 90 and -180 <= lon <= 180 else None
 
 
-def guide(places):
+def guide(places: list[dict], city: str) -> None:
     st.markdown("### Location guide")
     browser_value = get_browser_location(
         has_location="visitor_location" in st.session_state,
@@ -146,25 +178,71 @@ def guide(places):
     if not location:
         if st.session_state.get("location_error"):
             st.warning(f"Location not shared: {st.session_state['location_error']}")
-        st.caption("Share your browser location above to see approximate distances from your current position. Your coordinates stay only in this session.")
+        st.caption("Share your browser location above to see distances from your current position, your GPS coordinates, and the destination attraction map.")
         return
 
-    mappable = [p for p in places if isinstance(p.get("lat"), (int, float)) and isinstance(p.get("lon"), (int, float))]
+    mappable = [
+        place for place in places
+        if isinstance(place.get("lat"), (int, float))
+        and isinstance(place.get("lon"), (int, float))
+    ]
     if not mappable:
         st.info("Location shared. Map coordinates are not available for these attractions yet.")
         return
+
     st.success("Location shared. Distances below are from your current position.")
-    st.caption("These are direct (straight-line) estimates. Directions opens a route and travel-time estimate.")
+    st.caption(f"Your current coordinates: {location['lat']:.5f}, {location['lon']:.5f}. Distances are direct estimates; Directions opens a route and travel-time estimate.")
+
+    coordinate_rows = [
+        {
+            "place": place["name"],
+            "latitude": float(place["lat"]),
+            "longitude": float(place["lon"]),
+            "color": "#ef5b5b",
+            "size": 140,
+        }
+        for place in mappable
+    ]
+    map_data = pd.DataFrame(coordinate_rows)
+
+    st.markdown(f"#### {html.escape(city)} attraction map")
+    st.map(
+        map_data,
+        latitude="latitude",
+        longitude="longitude",
+        color="color",
+        size="size",
+        zoom=12,
+        use_container_width=True,
+    )
+
+    coordinate_table = map_data[["place", "latitude", "longitude"]].copy()
+    coordinate_table["latitude"] = coordinate_table["latitude"].round(5)
+    coordinate_table["longitude"] = coordinate_table["longitude"].round(5)
+    st.dataframe(
+        coordinate_table.rename(
+            columns={
+                "place": "Attraction",
+                "latitude": "Latitude",
+                "longitude": "Longitude",
+            }
+        ),
+        hide_index=True,
+        use_container_width=True,
+    )
+
     for place in mappable:
         km = distance_km(location["lat"], location["lon"], place["lat"], place["lon"])
-        maps = f"https://www.google.com/maps/dir/?api=1&origin={location['lat']},{location['lon']}&destination={place['lat']},{place['lon']}"
+        maps = (
+            "https://www.google.com/maps/dir/?api=1&origin="
+            f"{location['lat']},{location['lon']}&destination={place['lat']},{place['lon']}"
+        )
         left, right = st.columns([3, 1])
         with left:
             st.markdown(f"**{html.escape(place['name'])}**")
-            st.caption(f"About {km:.1f} km away")
+            st.caption(f"About {km:.1f} km away · Coordinates: {place['lat']:.5f}, {place['lon']:.5f}")
         with right:
             st.link_button("Directions", maps, use_container_width=True)
-
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def itinerary(city, people, days, budget):
@@ -204,8 +282,8 @@ if city.strip():
     st.markdown(f"## Explore {html.escape(city)}")
     with st.spinner(f"Finding highlights in {city}..."):
         places = attractions_for(city)
-    carousel(city, places)
-    guide(places)
+    attraction_background(city, places)
+    guide(places, city)
     if not GROQ_API_KEY:
         st.warning("Attraction previews and the location guide are ready. Add a Groq API key to generate the AI itinerary.")
         st.code('GROQ_API_KEY = "gsk_your_key_here"', language="toml")
