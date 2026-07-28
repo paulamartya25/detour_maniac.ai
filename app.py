@@ -66,14 +66,15 @@ st.markdown("""
     background: linear-gradient(115deg, rgba(255, 250, 243, .80), rgba(225, 245, 247, .72)),
         url("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80") center/cover fixed;
 }
-h1,h2,h3,h4,p,div,span,label { font-family: 'DM Sans', Arial, sans-serif; color: var(--ink) !important; }
+.stApp, .stApp p, .stApp label, .stApp span, .stApp [data-testid="stMarkdownContainer"] { font-family: 'DM Sans', Arial, sans-serif; color: var(--ink) !important; }
+.stApp h1, .stApp h2, .stApp h3 { color: #101b2d !important; font-family: 'Playfair Display', Georgia, serif !important; font-weight: 700 !important; letter-spacing: -.025em; }
 .block-container { max-width: 1220px; padding-top: 2.4rem; padding-bottom: 3rem; }
 .hero { text-align:center; margin: .4rem 0 1.6rem; padding: 1rem 1.25rem; }
 .eyebrow { color: #8d5411 !important; font-size: .78rem; font-weight: 700; letter-spacing: .16rem; margin-bottom: .3rem; text-transform: uppercase; }
 .title { color: #0b172a !important; font-family: 'Playfair Display', Georgia, serif !important; font-size: clamp(2.7rem, 6vw, 4.8rem); line-height: 1; letter-spacing: -.075rem; margin: 0; }
 .tagline { color: #263548 !important; font-family: 'Playfair Display', Georgia, serif !important; font-size: 1.3rem; font-style: italic; font-weight: 600; margin: .65rem 0 0; }
 .city-banner, .card, [data-testid="stAlert"], [data-testid="stDataFrame"], [data-testid="stVerticalBlockBorderWrapper"] {
-    background: var(--surface) !important; border: 1px solid rgba(255,255,255,.8); border-radius: 20px; box-shadow: 0 16px 42px rgba(23, 45, 68, .15); backdrop-filter: blur(12px);
+    background: rgba(255, 253, 249, .97) !important; border: 1px solid rgba(255,255,255,.9); border-radius: 20px; box-shadow: 0 16px 42px rgba(23, 45, 68, .18); backdrop-filter: blur(14px);
 }
 .city-banner { padding: 1rem 1.35rem; margin: 0 0 1rem; }
 .city-banner h2 { font-family: 'Playfair Display', Georgia, serif !important; font-size: 2rem; margin: 0; }
@@ -380,23 +381,24 @@ def hotel_price_guide(city: str, budget: tuple[int, int], people: int, days: int
     search_query = f"Google Hotels {city} {date_label} {people} guests {rooms} rooms"
     live_rates_url = f"https://www.google.com/travel/search?q={quote_plus(search_query)}"
 
-    st.markdown(
-        f"""
-        <section class="price-guide">
-          <h3>Hotel budget planner</h3>
-          <p>Your selected range is <strong>INR {budget[0]:,} to INR {budget[1]:,} per room, per night</strong> for {rooms} room(s) across {days} night(s).</p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
-    left, middle, right = st.columns(3)
-    left.metric("Stay dates", date_label)
-    middle.metric("Rooms x nights", f"{rooms} x {days}")
-    right.metric("Accommodation plan", f"INR {total_low:,.0f} to INR {total_high:,.0f}")
-    st.link_button("Compare live hotel prices for these dates", live_rates_url, use_container_width=True)
-    st.caption(
-        "Hotel rates change with dates, room type, taxes and availability. The range above is your planning budget; use the live comparison before booking."
-    )
+    with st.container(border=True):
+        st.markdown(
+            f"""
+            <section class="price-guide">
+              <h3>Hotel budget planner</h3>
+              <p>Your selected range is <strong>INR {budget[0]:,} to INR {budget[1]:,} per room, per night</strong> for {rooms} room(s) across {days} night(s).</p>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+        left, middle, right = st.columns(3)
+        left.metric("Stay dates", date_label)
+        middle.metric("Rooms x nights", f"{rooms} x {days}")
+        right.metric("Accommodation plan", f"INR {total_low:,.0f} to INR {total_high:,.0f}")
+        st.link_button("Compare live hotel prices for these dates", live_rates_url, use_container_width=True)
+        st.caption(
+            "Hotel rates change with dates, room type, taxes and availability. The range above is your planning budget; use the live comparison before booking."
+        )
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -411,7 +413,7 @@ def itinerary(city, people, days, budget, rooms, check_in):
         f"from {check_in.strftime('%d %B %Y')} to {check_out.strftime('%d %B %Y')}. "
         "Use clear Markdown headings (###). "
         "List exactly 5 attractions with short, useful descriptions. "
-        f"Recommend 5 suitable hotels inside the user's target budget of {budget[0]:,}{budget[1]:,} per room per night. "
+        f"Recommend 5 suitable hotels inside the user's target budget of INR {budget[0]:,} to INR {budget[1]:,} per room per night. "
         "For every hotel give its name, likely star category, and why it suits the trip, but do NOT invent a live, confirmed, or exact hotel rate. "
         "Add a short 'Hotel pricing note' stating that rates must be checked live for the selected dates and availability. "
         f"Calculate the accommodation planning range as INR {budget[0]:,} to INR {budget[1]:,} x {rooms} room(s) x {days} night(s), "
@@ -468,10 +470,9 @@ if city.strip():
                 st.error("Rate limit reached or the itinerary could not be generated. Please try again.")
                 st.caption(str(error))
             else:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.markdown(f"## Exclusive Itinerary for {html.escape(city)}")
-                st.markdown(plan)
-                st.success("Trip plan generated successfully!")
-                st.markdown("</div>", unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(f"## Exclusive itinerary for {html.escape(city)}")
+                    st.markdown(plan)
+                    st.success("Trip plan generated successfully!")
 else:
     st.info("Please enter a destination in the sidebar to begin.")
