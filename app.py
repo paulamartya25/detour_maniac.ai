@@ -7,6 +7,7 @@ from pathlib import Path
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit.errors import StreamlitSecretNotFoundError
 from langchain.agents import create_agent
 from langchain_community.callbacks import get_openai_callback
 from langchain_community.tools import DuckDuckGoSearchRun
@@ -21,11 +22,17 @@ WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 ROTATION_MS = 4000
 FALLBACK_IMAGE = "https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1400&q=85"
 
-try:
-    os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
-except KeyError:
-    st.error("Missing GROQ_API_KEY in Streamlit Secrets!")
-    st.stop()
+def load_groq_api_key() -> str | None:
+    """Load a local Streamlit secret, with an environment-variable fallback."""
+    try:
+        return st.secrets["GROQ_API_KEY"]
+    except (KeyError, StreamlitSecretNotFoundError):
+        return os.getenv("GROQ_API_KEY")
+
+
+GROQ_API_KEY = load_groq_api_key()
+if GROQ_API_KEY:
+    os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
 st.markdown("""
 <style>
@@ -199,17 +206,22 @@ if city.strip():
         places = attractions_for(city)
     carousel(city, places)
     guide(places)
-    with st.spinner(f"Organizing your {city} trip..."):
-        try:
-            plan = itinerary(city, int(people), int(days), budget)
-        except Exception as error:
-            st.error("Rate limit reached or the itinerary could not be generated. Please try again.")
-            st.caption(str(error))
-        else:
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.markdown(f"## Exclusive Itinerary for {html.escape(city)}")
-            st.markdown(plan)
-            st.success("Trip plan generated successfully!")
-            st.markdown("</div>", unsafe_allow_html=True)
+    if not GROQ_API_KEY:
+        st.warning("Attraction previews and the location guide are ready. Add a Groq API key to generate the AI itinerary.")
+        st.code('GROQ_API_KEY = "gsk_your_key_here"', language="toml")
+        st.caption("Create .streamlit/secrets.toml from .streamlit/secrets.toml.example, add your key, then restart Streamlit.")
+    else:
+        with st.spinner(f"Organizing your {city} trip..."):
+            try:
+                plan = itinerary(city, int(people), int(days), budget)
+            except Exception as error:
+                st.error("Rate limit reached or the itinerary could not be generated. Please try again.")
+                st.caption(str(error))
+            else:
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.markdown(f"## Exclusive Itinerary for {html.escape(city)}")
+                st.markdown(plan)
+                st.success("Trip plan generated successfully!")
+                st.markdown("</div>", unsafe_allow_html=True)
 else:
     st.info("Please enter a destination in the sidebar to begin.")
