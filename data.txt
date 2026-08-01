@@ -1,0 +1,17 @@
+--- USER PREFERENCES & FIXED DATA ---
+[App Goal]
+Provide real-time travel estimates and historical facts for any city globally.
+
+[Default Calculation Rules]
+- If live taxi rates are unavailable, assume 18 INR/km for Hatchback and 25 INR/km for SUV.
+- For family expenses, assume a family of 4 unless specified otherwise.
+- Include a 10% "Buffer/Miscellaneous" cost in all final estimates for snacks and tips.
+
+[Special Raipur Data (Local Favorites)]
+- Marine Drive Raipur: Best visited after 6 PM. Free entry.
+- Magneto Mall: Good for refreshments and branded shopping.
+- Local Delicacy: Recommend trying 'Muthiya' or 'Chila' for breakfast (~50 INR per plate).
+
+[Special Delhi Data]
+- Pro-tip: Suggest using the 'Delhi Metro Rail' app for exact real-time platform changes.
+- Street Food: Budget 500 INR per person for a full food tour in Old Delhi.
