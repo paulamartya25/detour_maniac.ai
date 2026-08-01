@@ -1,14 +1,12 @@
-"""Attractions page displaying up to 6 verified tourist attractions.
+﻿"""Attractions page displaying up to 6 verified tourist attractions.
 
 This page shows verified Wikipedia attractions within 45km of the destination
-with rotating background images every 4 seconds and dynamic font colors
-for better visibility against changing backgrounds.
+with a clean white background for better readability.
 
 Requirements: 1.1, 1.2, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7
 """
 
 import html
-import time
 
 import requests
 import streamlit as st
@@ -22,10 +20,85 @@ st.set_page_config(page_title="Attractions - DETOUR_MANIAX", layout="wide", page
 # Apply consistent styling
 st.markdown(get_base_styles(), unsafe_allow_html=True)
 
+# Custom styles for Attractions page with white background
+st.markdown("""
+<style>
+.stApp {
+    background-color: #ffffff !important;
+}
+.attraction-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 2rem 1rem;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+    border-radius: 20px;
+}
+.attraction-header h1 {
+    color: #0b172a;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 2.5rem;
+    margin: 0 0 0.5rem 0;
+}
+.attraction-header p {
+    color: #6b7280;
+    font-size: 1.1rem;
+}
+.attraction-card {
+    background: #ffffff;
+    border: 2px solid #e5e7eb;
+    border-left: 5px solid #667eea;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    margin-bottom: 1.5rem;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+}
+.attraction-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+.attraction-eyebrow {
+    color: #667eea;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1rem;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+}
+.attraction-name {
+    color: #0b172a;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+}
+.attraction-description {
+    color: #374151;
+    font-size: 1rem;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+.attraction-image {
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    width: 100%;
+    max-height: 400px;
+    object-fit: cover;
+}
+.attraction-link {
+    color: #667eea;
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+.attraction-link:hover {
+    text-decoration: underline;
+}
+</style>
+""", unsafe_allow_html=True)
+
 WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 NOMINATIM_API = "https://nominatim.openstreetmap.org/search"
 MAX_ATTRACTION_DISTANCE_KM = 45
-FALLBACK_IMAGE = "https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1400&q=85"
 
 NON_ATTRACTION_CATEGORY_HINTS = (
     "annual event", "recurring event", "book fair", "festival", "conference", "trade fair",
@@ -38,26 +111,14 @@ ATTRACTION_CATEGORY_HINTS = (
     "beach", "lake", "waterfall", "forest", "observatory", "aquarium", "amusement",
 )
 
-LUXURY_SLOGANS = (
-    "Chase horizons. Collect stories.",
-    "Your next unforgettable chapter starts here.",
-    "Go further, feel deeper, remember forever.",
-    "Curated escapes for the beautifully curious.",
-    "Leave with memories, not just photographs.",
-)
-
-
 def distance_km(lat1, lon1, lat2, lon2):
-    """Calculate Haversine distance between two coordinates."""
     import math
     a = math.sin(math.radians(lat2-lat1)/2)**2
     a += math.cos(math.radians(lat1))*math.cos(math.radians(lat2))*math.sin(math.radians(lon2-lon1)/2)**2
     return 6371.0088 * 2 * math.asin(math.sqrt(a))
 
-
 @st.cache_data(ttl=604800, show_spinner=False)
 def destination_coordinates(city: str) -> dict | None:
-    """Resolve the destination once so attraction results can be geographically verified."""
     try:
         response = requests.get(
             NOMINATIM_API,
@@ -73,19 +134,15 @@ def destination_coordinates(city: str) -> dict | None:
     except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
         return None
 
-
 def is_likely_attraction(page: dict) -> bool:
-    """Keep only Wikipedia pages that are classified like a visitor attraction."""
     category_text = " ".join(
         category.get("title", "").replace("Category:", "").lower()
         for category in page.get("categories", [])
     )
     return (not any(hint in category_text for hint in NON_ATTRACTION_CATEGORY_HINTS) and any(hint in category_text for hint in ATTRACTION_CATEGORY_HINTS))
 
-
 @st.cache_data(ttl=86400, show_spinner=False)
 def attractions_for(city: str) -> list[dict]:
-    """Return only Wikipedia attractions that are geographically near the requested city."""
     destination = destination_coordinates(city)
     if not destination:
         return []
@@ -141,116 +198,6 @@ def attractions_for(city: str) -> list[dict]:
     places.sort(key=lambda item: (item["image"] is None, item["city_distance"]))
     return places[:6]
 
-
-def get_brightness(image_url: str) -> float:
-    """Estimate brightness of background image (0=dark, 1=bright).
-    Simple heuristic: assume travel images are moderately bright by default.
-    """
-    # In a production system, you might analyze the actual image
-    # For now, we'll alternate between dark and light text based on index
-    return 0.5
-
-
-@st.fragment(run_every="4s")
-def attraction_background(city: str, places: list[dict]) -> None:
-    """Rotate a validated destination attraction image in the background with dynamic font colors."""
-    if not places:
-        st.info(
-            f"No geographically verified attraction pages were found for {city} right now. "
-            "The app will not show unrelated locations."
-        )
-        return
-
-    current_index = int(time.time() // 4) % len(places)
-    current = places[current_index]
-    image_url = html.escape(current["image"] or FALLBACK_IMAGE, quote=True)
-    attraction_name = html.escape(current["name"])
-    summary = html.escape(" ".join(current["description"].split())[:320])
-    slogan = html.escape(LUXURY_SLOGANS[current_index % len(LUXURY_SLOGANS)])
-    
-    # Dynamic font color selection based on alternating pattern
-    # Light backgrounds get dark text, dark backgrounds get light text
-    if current_index % 2 == 0:
-        # Light text for darker backgrounds
-        text_color = "#ffffff"
-        text_shadow = "2px 2px 8px rgba(0, 0, 0, 0.8)"
-        eyebrow_color = "#ffd89e"
-        slogan_color = "#f5dcc4"
-        card_bg = "rgba(20, 30, 40, .88)"
-        card_border = "rgba(255, 255, 255, .4)"
-    else:
-        # Dark text for lighter backgrounds
-        text_color = "#111827"
-        text_shadow = "1px 1px 3px rgba(255, 255, 255, 0.9)"
-        eyebrow_color = "#9a5c11"
-        slogan_color = "#8b4333"
-        card_bg = "rgba(255, 253, 248, .92)"
-        card_border = "rgba(255, 255, 255, .86)"
-
-    st.markdown(
-        f"""
-        <style>
-        .stApp {{
-            background-image: linear-gradient(rgba(16, 30, 44, .40), rgba(16, 30, 44, .42)), url("{image_url}") !important;
-            background-position: center !important;
-            background-size: cover !important;
-            background-attachment: fixed !important;
-            transition: background-image 0.8s ease-in-out;
-        }}
-        .destination-attraction {{
-            background: {card_bg};
-            border: 1px solid {card_border};
-            border-left: 5px solid #d66745;
-            border-radius: 22px;
-            box-shadow: 0 20px 50px rgba(16, 35, 55, .35);
-            color: {text_color} !important;
-            margin: 0 0 1.5rem;
-            padding: 1.6rem 1.8rem;
-        }}
-        .destination-attraction * {{ color: {text_color} !important; text-shadow: {text_shadow}; }}
-        .destination-attraction .eyebrow {{
-            color: {eyebrow_color} !important;
-            font-size: .80rem;
-            font-weight: 700;
-            letter-spacing: .14rem;
-            margin: 0 0 .4rem;
-            text-transform: uppercase;
-        }}
-        .destination-attraction .slogan-line {{ 
-            color: {slogan_color} !important; 
-            font-family: 'Playfair Display', Georgia, serif !important; 
-            font-size: 1.1rem; 
-            font-style: italic; 
-            font-weight: 700; 
-            margin: 0 0 .6rem; 
-        }}
-        .destination-attraction h2 {{ 
-            font-family: 'Playfair Display', Georgia, serif !important; 
-            font-size: 2.2rem; 
-            margin: 0 0 .3rem;
-            line-height: 1.2;
-        }}
-        .destination-attraction p {{ 
-            line-height: 1.6; 
-            margin: 0;
-            font-size: 1.05rem;
-        }}
-        </style>
-        <section class="destination-attraction">
-          <p class="eyebrow">Verified attraction near {html.escape(city)}</p>
-          <h2>{attraction_name}</h2>
-          <p class="slogan-line">{slogan}</p>
-          <p>{summary}</p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        f"Only attractions with Wikipedia coordinates within {MAX_ATTRACTION_DISTANCE_KM} km "
-        f"of {city} are shown. The background changes every 4 seconds."
-    )
-
-
 # Retrieve destination from session state
 settings = SessionStateManager.get_trip_settings()
 
@@ -263,37 +210,52 @@ if not settings or not settings.destination.strip():
 city = settings.destination
 
 # Page header
-st.markdown(f"# 🎭 Attractions in {html.escape(city)}")
-st.caption("Discover verified tourist destinations with rotating vibrant backgrounds")
+st.markdown(f"""
+<div class="attraction-header">
+    <h1>🎭 Attractions in {html.escape(city)}</h1>
+    <p>Discover verified tourist spots within {MAX_ATTRACTION_DISTANCE_KM} km</p>
+</div>
+""", unsafe_allow_html=True)
 
-# Fetch and display attractions
-with st.spinner(f"Finding verified attractions in {city}..."):
+# Fetch attractions
+with st.spinner(f"Loading attractions in {city}..."):
     places = attractions_for(city)
 
-# Display rotating background with attractions
-attraction_background(city, places)
-
-# Display up to 6 attraction cards
-if places:
-    st.markdown("---")
-    st.markdown("### Featured Attractions")
-    
-    for i, place in enumerate(places):
-        with st.container(border=True):
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                st.markdown(f"#### {html.escape(place['name'])}")
-                st.write(place['description'])
-                st.caption(f"📍 Distance: ~{place['city_distance']:.1f} km from {city}")
-            
-            with col2:
-                if place.get('image'):
-                    st.image(place['image'], use_container_width=True)
-    
-    st.success(f"✅ Found {len(places)} verified attractions near {city}")
-else:
+if not places:
     st.info(f"No verified attractions found within {MAX_ATTRACTION_DISTANCE_KM} km of {city}.")
+    st.page_link("app.py", label="← Back to Homepage", icon="🏠")
+    st.stop()
+
+# Display attractions
+st.markdown(f"### Featured Attractions ({len(places)} found)")
+
+for idx, place in enumerate(places, 1):
+    attraction_name = html.escape(place["name"])
+    description = html.escape(place["description"])
+    image_url = place.get("image")
+    source_url = place.get("source")
+
+    st.markdown(f"""
+    <div class="attraction-card">
+        <div class="attraction-eyebrow">Attraction {idx} of {len(places)}</div>
+        <h2 class="attraction-name">{attraction_name}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if image_url:
+        st.image(image_url, use_container_width=True)
+
+    st.markdown(f"""
+    <div class="attraction-description">
+        {description}
+    </div>
+    """, unsafe_allow_html=True)
+
+    if source_url:
+        st.markdown(f'<a href="{source_url}" target="_blank" class="attraction-link">📖 View on Wikipedia →</a>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
 # Navigation hint
-st.info("💡 View these attractions on an interactive map using the Maps page in the sidebar!")
+st.markdown("---")
+st.info("💡 Explore hotels and maps using the sidebar navigation!")

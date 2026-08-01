@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ﻿__pycache__/
 *.py[cod]
 *.class
@@ -9,3 +10,16 @@ venv/
 .DS_Store
 .pytest_cache/
 .kiro/
+=======
+# Ignore virtual environment
+venv/
+env/
+
+# Ignore secrets (VERY IMPORTANT)
+.streamlit/secrets.toml
+.env
+
+# Ignore compiled python files
+__pycache__/
+*.pyc
+>>>>>>> d946654c4c82f35f5ec0762ddfda75b3742d1ee1
