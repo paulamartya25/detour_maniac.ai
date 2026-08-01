@@ -1,11 +1,8 @@
-streamlit
-langchain
-langchain-groq
-langchain-community
-langchain-core
-duckduckgo-search
-geopy
+﻿streamlit
 requests
-ddgs
-
 pandas
+langchain
+langchain-community
+langchain-groq
+duckduckgo-search
+streamlit-js-eval

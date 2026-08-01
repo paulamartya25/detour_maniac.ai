@@ -4,7 +4,6 @@ import html
 import pandas as pd
 import requests
 import streamlit as st
-import streamlit.components.v1 as components
 
 from utils.session_state import SessionStateManager
 from utils.styling import get_base_styles
@@ -155,116 +154,24 @@ if not places:
 
 # Location input section
 st.markdown("### 📍 Enter Your Location")
-st.caption("Provide your current location to see distances and get navigation directions")
+st.caption("Choose how you want to provide your location")
 
 with st.container(border=True):
-    location_method = st.radio(
-        "Choose location method:",
-        ["📝 Enter Location Manually", "🌍 Use GPS (Click button below)"],
-        horizontal=True,
-        key="location_method"
-    )
+    # Create tabs for different input methods
+    tab1, tab2, tab3 = st.tabs(["🔍 Search by City", "📍 Enter Coordinates", "🌐 How to Get GPS Coordinates"])
 
-    st.markdown("---")
+    with tab1:
+        st.markdown("**Search for your current location:**")
+        location_name = st.text_input(
+            "Your City/Location",
+            placeholder="e.g., Mumbai, Delhi, Bangalore, Kolkata",
+            key="location_search",
+            help="Enter your current city or area"
+        )
 
-    if location_method == "🌍 Use GPS (Click button below)":
-        st.markdown("**⚠️ Note:** Due to browser security restrictions, you'll need to:")
-        st.markdown("1. Click the 'Get My Location' button below")
-        st.markdown("2. Allow location access in your browser when prompted")
-        st.markdown("3. Copy the coordinates that appear")
-        st.markdown("4. Switch to 'Enter Location Manually' and paste them")
-
-        st.markdown("---")
-
-        # Simple geolocation component
-        geo_html = """
-        <div style="text-align: center; padding: 20px;">
-            <button onclick="getLocation()" style="
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                border: none;
-                border-radius: 12px;
-                color: white;
-                cursor: pointer;
-                font-size: 16px;
-                font-weight: 600;
-                padding: 14px 28px;
-                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-            ">📍 Get My Location</button>
-            <div id="result" style="margin-top: 15px; font-size: 14px;"></div>
-            <div id="coords" style="
-                margin-top: 10px;
-                padding: 10px;
-                background: #f0f9ff;
-                border-radius: 8px;
-                font-family: monospace;
-                display: none;
-            "></div>
-        </div>
-        <script>
-        function getLocation() {
-            const result = document.getElementById('result');
-            const coords = document.getElementById('coords');
-
-            if (!navigator.geolocation) {
-                result.innerHTML = '❌ Geolocation not supported';
-                return;
-            }
-
-            result.innerHTML = '⏳ Getting location...';
-
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const lat = position.coords.latitude.toFixed(6);
-                    const lon = position.coords.longitude.toFixed(6);
-                    result.innerHTML = '✅ Location found! Copy the coordinates below:';
-                    coords.style.display = 'block';
-                    coords.innerHTML = <strong>Latitude:</strong> <br><strong>Longitude:</strong> ;
-                },
-                (error) => {
-                    let msg = '❌ ';
-                    if (error.code === 1) msg += 'Permission denied. Please enable location in browser settings.';
-                    else if (error.code === 2) msg += 'Location unavailable.';
-                    else if (error.code === 3) msg += 'Request timed out.';
-                    else msg += 'Unknown error.';
-                    result.innerHTML = msg;
-                },
-                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-            );
-        }
-        </script>
-        """
-
-        components.html(geo_html, height=200)
-
-        st.info("💡 After getting your location above, switch to 'Enter Location Manually' to use the coordinates.")
-
-    else:  # Manual entry
-        tab1, tab2 = st.tabs(["📍 Enter Coordinates", "🔍 Search by City"])
-
-        with tab1:
-            st.markdown("**Enter your GPS coordinates:**")
-            col1, col2 = st.columns(2)
-            with col1:
-                user_lat = st.number_input("Latitude", min_value=-90.0, max_value=90.0, value=None, format="%.6f", help="e.g., 25.4358", key="manual_lat")
-            with col2:
-                user_lon = st.number_input("Longitude", min_value=-180.0, max_value=180.0, value=None, format="%.6f", help="e.g., 81.8463", key="manual_lon")
-
-            if user_lat is not None and user_lon is not None:
-                if st.button("✅ Set My Location"):
-                    location = {"lat": user_lat, "lon": user_lon}
-                    st.session_state["visitor_location"] = location
-                    SessionStateManager.save_user_location(user_lat, user_lon)
-                    st.success(f"✅ Location set: {user_lat:.5f}, {user_lon:.5f}")
-                    st.rerun()
-
-            st.caption("💡 Find coordinates: Right-click on Google Maps → Click coordinates to copy")
-
-        with tab2:
-            st.markdown("**Search for your city:**")
-            location_name = st.text_input("Enter your city/area", placeholder="e.g., Varanasi, Mumbai, Delhi", key="location_search")
-
-            if location_name.strip() and st.button("🔍 Find My Location"):
-                with st.spinner("Looking up coordinates..."):
+        if st.button("🔍 Find My Location", type="primary", use_container_width=True):
+            if location_name.strip():
+                with st.spinner(f"Finding coordinates for {location_name}..."):
                     coords = geocode_location(location_name.strip())
                     if coords:
                         st.session_state["visitor_location"] = coords
@@ -272,18 +179,76 @@ with st.container(border=True):
                         st.success(f"✅ Found {location_name}: {coords['lat']:.5f}, {coords['lon']:.5f}")
                         st.rerun()
                     else:
-                        st.error(f"❌ Could not find '{location_name}'. Try coordinates in the other tab.")
+                        st.error(f"❌ Could not find '{location_name}'. Try entering coordinates in the Coordinates tab.")
+            else:
+                st.warning("Please enter a city name first.")
 
-        location = st.session_state.get("visitor_location")
-        if location:
-            st.success(f"📍 Current location: {location['lat']:.5f}, {location['lon']:.5f}")
-            if st.button("🗑️ Clear Location"):
-                st.session_state.pop("visitor_location", None)
+    with tab2:
+        st.markdown("**Enter your GPS coordinates:**")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            user_lat = st.number_input(
+                "Latitude",
+                min_value=-90.0,
+                max_value=90.0,
+                value=None,
+                format="%.6f",
+                help="Example: 28.7041 (for Delhi)",
+                key="manual_lat"
+            )
+        with col2:
+            user_lon = st.number_input(
+                "Longitude",
+                min_value=-180.0,
+                max_value=180.0,
+                value=None,
+                format="%.6f",
+                help="Example: 77.1025 (for Delhi)",
+                key="manual_lon"
+            )
+
+        if user_lat is not None and user_lon is not None:
+            if st.button("✅ Set My Location", type="primary", use_container_width=True):
+                location = {"lat": user_lat, "lon": user_lon}
+                st.session_state["visitor_location"] = location
+                SessionStateManager.save_user_location(user_lat, user_lon)
+                st.success(f"✅ Location set: {user_lat:.5f}, {user_lon:.5f}")
                 st.rerun()
+
+    with tab3:
+        st.markdown("**📱 How to get your GPS coordinates:**")
+
+        st.markdown("""
+        **Method 1: Google Maps (Easiest)**
+        1. Open [Google Maps](https://www.google.com/maps) on your phone or computer
+        2. Right-click (or long-press on mobile) on your location
+        3. Click the coordinates that appear at the top
+        4. Coordinates are now copied! Paste them in the "Coordinates" tab
+
+        **Method 2: Your Phone's Location**
+        - **iPhone:** Settings → Privacy → Location Services → System Services → Compass
+        - **Android:** Open Google Maps app → Tap blue dot → See coordinates at top
+
+        **Method 3: Search Your City**
+        - Use the "Search by City" tab above
+        - Enter your current city name
+        - We'll find the coordinates automatically!
+        """)
+
+        st.info("💡 **Tip:** The easiest way is to use the 'Search by City' tab and just type your city name!")
+
+    # Show current location if set
+    location = st.session_state.get("visitor_location")
+    if location:
+        st.success(f"📍 **Current location set:** {location['lat']:.5f}, {location['lon']:.5f}")
+        if st.button("🗑️ Clear Location", key="clear_loc"):
+            st.session_state.pop("visitor_location", None)
+            st.rerun()
 
 # Interactive Map
 st.markdown("---")
-st.markdown(f"### Interactive Map - {html.escape(city)} Attractions")
+st.markdown(f"### 🗺️ Interactive Map - {html.escape(city)} Attractions")
 
 mappable = [
     place for place in places
@@ -314,7 +279,7 @@ if mappable:
         use_container_width=True,
     )
 
-    st.markdown("#### Attraction Coordinates")
+    st.markdown("#### 📋 Attraction Coordinates")
     coordinate_table = map_data[["place", "latitude", "longitude"]].copy()
     coordinate_table["latitude"] = coordinate_table["latitude"].round(5)
     coordinate_table["longitude"] = coordinate_table["longitude"].round(5)
@@ -338,12 +303,13 @@ st.markdown("---")
 location = st.session_state.get("visitor_location")
 
 if not location:
-    st.info("ℹ️ Enter your location above to see distances and get navigation directions to each attraction.")
+    st.info("ℹ️ **Set your location above** to see distances and get navigation directions to each attraction.")
+    st.caption("💡 Tip: Use the 'Search by City' tab for the easiest way to set your location!")
 else:
-    st.markdown(f"### 🎯 Your Location: {location['lat']:.5f}, {location['lon']:.5f}")
+    st.markdown(f"### 🎯 Distances from Your Location")
+    st.caption(f"Calculating from: {location['lat']:.5f}, {location['lon']:.5f}")
 
     st.markdown("---")
-    st.markdown("### 🧭 Navigation & Directions")
 
     for place in mappable:
         km = calculate_haversine_distance(
@@ -363,18 +329,18 @@ else:
 
             with col1:
                 st.markdown(f"#### {html.escape(place['name'])}")
-                st.write(f"📏 Distance: **~{km:.1f} km** from your location")
+                st.markdown(f"📏 **Distance:** ~{km:.1f} km from your location")
                 st.caption(f"📍 Coordinates: {place['lat']:.5f}, {place['lon']:.5f}")
                 if place.get("source"):
-                    st.markdown(f"[View on Wikipedia]({place['source']})")
+                    st.markdown(f"[📖 View on Wikipedia]({place['source']})")
 
             with col2:
                 st.link_button(
-                    "🧭 Directions",
+                    "🧭 Get Directions",
                     maps_url,
                     use_container_width=True,
-                    help="Opens Google Maps"
+                    help="Opens in Google Maps"
                 )
 
 st.markdown("---")
-st.info("💡 Explore hotels and attractions using the sidebar navigation!")
+st.info("💡 Explore **Hotels** and **Attractions** using the sidebar navigation!")
