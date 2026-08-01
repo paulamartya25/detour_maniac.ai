@@ -132,131 +132,6 @@ def geocode_location(location_name: str) -> dict | None:
     except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
         return None
 
-def get_geolocation():
-    html_code = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body { margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-            .container { text-align: center; }
-            .button {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                border: none;
-                border-radius: 12px;
-                color: white;
-                cursor: pointer;
-                font-size: 16px;
-                font-weight: 600;
-                padding: 14px 28px;
-                transition: all 0.3s ease;
-                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-            }
-            .button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6); }
-            .button:active { transform: translateY(0); }
-            .button:disabled { opacity: 0.6; cursor: not-allowed; }
-            .status {
-                margin-top: 15px;
-                padding: 12px;
-                border-radius: 8px;
-                font-size: 14px;
-                min-height: 20px;
-            }
-            .success { background: #d1fae5; color: #065f46; }
-            .error { background: #fee2e2; color: #991b1b; }
-            .loading { background: #fef3c7; color: #92400e; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <button id="getLocationBtn" class="button">📍 Get My Location</button>
-            <div id="status" class="status"></div>
-        </div>
-        <script>
-            const button = document.getElementById('getLocationBtn');
-            const status = document.getElementById('status');
-
-            function sendMessage(data) {
-                window.parent.postMessage({
-                    isStreamlitMessage: true,
-                    type: 'streamlit:setComponentValue',
-                    value: data
-                }, '*');
-            }
-
-            button.addEventListener('click', () => {
-                if (!navigator.geolocation) {
-                    status.className = 'status error';
-                    status.textContent = '❌ Geolocation not supported by your browser';
-                    sendMessage({ error: 'not_supported' });
-                    return;
-                }
-
-                button.disabled = true;
-                status.className = 'status loading';
-                status.textContent = '⏳ Requesting your location...';
-
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-
-                        status.className = 'status success';
-                        status.textContent = ✅ Location fetched! Lat: , Lon: ;
-
-                        sendMessage({
-                            status: 'success',
-                            latitude: lat,
-                            longitude: lon,
-                            accuracy: position.coords.accuracy
-                        });
-
-                        button.disabled = false;
-                        button.textContent = '🔄 Update Location';
-                    },
-                    (error) => {
-                        let message = '❌ ';
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                message += 'Permission denied. Enable location in browser settings.';
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                message += 'Location unavailable. Try again.';
-                                break;
-                            case error.TIMEOUT:
-                                message += 'Request timed out. Try again.';
-                                break;
-                            default:
-                                message += 'Unknown error occurred.';
-                        }
-
-                        status.className = 'status error';
-                        status.textContent = message;
-
-                        sendMessage({ status: 'error', message: message });
-
-                        button.disabled = false;
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 15000,
-                        maximumAge: 0
-                    }
-                );
-            });
-
-            // Notify Streamlit that component is ready
-            window.parent.postMessage({
-                isStreamlitMessage: true,
-                type: 'streamlit:componentReady',
-                apiVersion: 1
-            }, '*');
-        </script>
-    </body>
-    </html>
-    '''
-    return components.html(html_code, height=150)
-
 # Retrieve destination from session state
 settings = SessionStateManager.get_trip_settings()
 
@@ -285,38 +160,89 @@ st.caption("Provide your current location to see distances and get navigation di
 with st.container(border=True):
     location_method = st.radio(
         "Choose location method:",
-        ["🌍 Fetch My Current Location (GPS)", "📝 Enter Location Manually"],
+        ["📝 Enter Location Manually", "🌍 Use GPS (Click button below)"],
         horizontal=True,
         key="location_method"
     )
 
     st.markdown("---")
 
-    if location_method == "🌍 Fetch My Current Location (GPS)":
-        st.markdown("**Click the button below to allow browser access to your location:**")
+    if location_method == "🌍 Use GPS (Click button below)":
+        st.markdown("**⚠️ Note:** Due to browser security restrictions, you'll need to:")
+        st.markdown("1. Click the 'Get My Location' button below")
+        st.markdown("2. Allow location access in your browser when prompted")
+        st.markdown("3. Copy the coordinates that appear")
+        st.markdown("4. Switch to 'Enter Location Manually' and paste them")
 
-        geo_data = get_geolocation()
+        st.markdown("---")
 
-        if geo_data and isinstance(geo_data, dict) and geo_data.get('status') == 'success':
-            lat = geo_data.get('latitude')
-            lon = geo_data.get('longitude')
-            if lat is not None and lon is not None:
-                st.session_state["visitor_location"] = {"lat": lat, "lon": lon}
-                SessionStateManager.save_user_location(lat, lon)
-                st.success(f"✅ Location received: {lat:.5f}, {lon:.5f}")
-                st.rerun()
+        # Simple geolocation component
+        geo_html = """
+        <div style="text-align: center; padding: 20px;">
+            <button onclick="getLocation()" style="
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border: none;
+                border-radius: 12px;
+                color: white;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: 600;
+                padding: 14px 28px;
+                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            ">📍 Get My Location</button>
+            <div id="result" style="margin-top: 15px; font-size: 14px;"></div>
+            <div id="coords" style="
+                margin-top: 10px;
+                padding: 10px;
+                background: #f0f9ff;
+                border-radius: 8px;
+                font-family: monospace;
+                display: none;
+            "></div>
+        </div>
+        <script>
+        function getLocation() {
+            const result = document.getElementById('result');
+            const coords = document.getElementById('coords');
 
-        location = st.session_state.get("visitor_location")
-        if location:
-            st.info(f"📍 Using saved location: {location['lat']:.5f}, {location['lon']:.5f}")
-            if st.button("🗑️ Clear Saved Location"):
-                st.session_state.pop("visitor_location", None)
-                st.rerun()
+            if (!navigator.geolocation) {
+                result.innerHTML = '❌ Geolocation not supported';
+                return;
+            }
+
+            result.innerHTML = '⏳ Getting location...';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude.toFixed(6);
+                    const lon = position.coords.longitude.toFixed(6);
+                    result.innerHTML = '✅ Location found! Copy the coordinates below:';
+                    coords.style.display = 'block';
+                    coords.innerHTML = <strong>Latitude:</strong> <br><strong>Longitude:</strong> ;
+                },
+                (error) => {
+                    let msg = '❌ ';
+                    if (error.code === 1) msg += 'Permission denied. Please enable location in browser settings.';
+                    else if (error.code === 2) msg += 'Location unavailable.';
+                    else if (error.code === 3) msg += 'Request timed out.';
+                    else msg += 'Unknown error.';
+                    result.innerHTML = msg;
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+            );
+        }
+        </script>
+        """
+
+        components.html(geo_html, height=200)
+
+        st.info("💡 After getting your location above, switch to 'Enter Location Manually' to use the coordinates.")
 
     else:  # Manual entry
-        tab1, tab2 = st.tabs(["📍 Enter Coordinates", "🔍 Search by Name"])
+        tab1, tab2 = st.tabs(["📍 Enter Coordinates", "🔍 Search by City"])
 
         with tab1:
+            st.markdown("**Enter your GPS coordinates:**")
             col1, col2 = st.columns(2)
             with col1:
                 user_lat = st.number_input("Latitude", min_value=-90.0, max_value=90.0, value=None, format="%.6f", help="e.g., 25.4358", key="manual_lat")
@@ -324,19 +250,20 @@ with st.container(border=True):
                 user_lon = st.number_input("Longitude", min_value=-180.0, max_value=180.0, value=None, format="%.6f", help="e.g., 81.8463", key="manual_lon")
 
             if user_lat is not None and user_lon is not None:
-                if st.button("✅ Set Location"):
+                if st.button("✅ Set My Location"):
                     location = {"lat": user_lat, "lon": user_lon}
                     st.session_state["visitor_location"] = location
                     SessionStateManager.save_user_location(user_lat, user_lon)
                     st.success(f"✅ Location set: {user_lat:.5f}, {user_lon:.5f}")
                     st.rerun()
 
-            st.caption("💡 Find coordinates on Google Maps: Right-click → Click coordinates to copy")
+            st.caption("💡 Find coordinates: Right-click on Google Maps → Click coordinates to copy")
 
         with tab2:
-            location_name = st.text_input("Enter your city/area", placeholder="e.g., Varanasi, Lucknow, Delhi", key="location_search")
+            st.markdown("**Search for your city:**")
+            location_name = st.text_input("Enter your city/area", placeholder="e.g., Varanasi, Mumbai, Delhi", key="location_search")
 
-            if location_name.strip() and st.button("🔍 Find Coordinates"):
+            if location_name.strip() and st.button("🔍 Find My Location"):
                 with st.spinner("Looking up coordinates..."):
                     coords = geocode_location(location_name.strip())
                     if coords:
@@ -345,11 +272,11 @@ with st.container(border=True):
                         st.success(f"✅ Found {location_name}: {coords['lat']:.5f}, {coords['lon']:.5f}")
                         st.rerun()
                     else:
-                        st.error(f"❌ Could not find '{location_name}'. Try entering coordinates in the other tab.")
+                        st.error(f"❌ Could not find '{location_name}'. Try coordinates in the other tab.")
 
         location = st.session_state.get("visitor_location")
         if location:
-            st.info(f"📍 Current location: {location['lat']:.5f}, {location['lon']:.5f}")
+            st.success(f"📍 Current location: {location['lat']:.5f}, {location['lon']:.5f}")
             if st.button("🗑️ Clear Location"):
                 st.session_state.pop("visitor_location", None)
                 st.rerun()
@@ -443,10 +370,10 @@ else:
 
             with col2:
                 st.link_button(
-                    "🧭 Get Directions",
+                    "🧭 Directions",
                     maps_url,
                     use_container_width=True,
-                    help="Opens Google Maps with directions from your current location"
+                    help="Opens Google Maps"
                 )
 
 st.markdown("---")
