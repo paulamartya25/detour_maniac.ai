@@ -1,9 +1,16 @@
-﻿"""Maps page with interactive maps and location-based navigation."""
+﻿"""Maps page with AUTOMATIC GPS location fetching."""
 
 import html
 import pandas as pd
 import requests
 import streamlit as st
+
+try:
+    from streamlit_js_eval import get_geolocation
+    GEOLOCATION_AVAILABLE = True
+except ImportError:
+    GEOLOCATION_AVAILABLE = False
+    st.warning("⚠️ Installing streamlit-js-eval for GPS feature...")
 
 from utils.session_state import SessionStateManager
 from utils.styling import get_base_styles
@@ -153,175 +160,176 @@ if not places:
     st.stop()
 
 # Location input section
-st.markdown("### 📍 Enter Your Location")
-st.caption("Choose how you want to provide your location")
+st.markdown("### 📍 Set Your Location")
+st.caption("Choose your preferred method to set your location")
 
 with st.container(border=True):
-    # Create tabs for different input methods
-    tab1, tab2, tab3 = st.tabs(["🔍 Search by City", "📍 Enter Coordinates", "🌐 How to Get GPS Coordinates"])
+    # Initialize location request state
+    if 'location_requested' not in st.session_state:
+        st.session_state.location_requested = False
+
+    tab1, tab2, tab3 = st.tabs(["🌍 Get My Location (GPS)", "🔍 Search by City", "📍 Enter Coordinates"])
 
     with tab1:
-        st.markdown("**Search for your current location:**")
-        location_name = st.text_input(
-            "Your City/Location",
-            placeholder="e.g., Mumbai, Delhi, Bangalore, Kolkata",
-            key="location_search",
-            help="Enter your current city or area"
-        )
+        st.markdown("**Automatically fetch your GPS location:**")
 
-        if st.button("🔍 Find My Location", type="primary", use_container_width=True):
-            if location_name.strip():
-                with st.spinner(f"Finding coordinates for {location_name}..."):
-                    coords = geocode_location(location_name.strip())
-                    if coords:
-                        st.session_state["visitor_location"] = coords
-                        SessionStateManager.save_user_location(coords["lat"], coords["lon"])
-                        st.success(f"✅ Found {location_name}: {coords['lat']:.5f}, {coords['lon']:.5f}")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ Could not find '{location_name}'. Try entering coordinates in the Coordinates tab.")
-            else:
-                st.warning("Please enter a city name first.")
+        if not GEOLOCATION_AVAILABLE:
+            st.error("❌ GPS feature requires streamlit-js-eval library")
+            st.code("pip install streamlit-js-eval")
+            st.info("After installation, restart the app to use GPS.")
+        else:
+            col1, col2 = st.columns([1, 2])
+
+            with col1:
+                # The magic button that does everything automatically
+                if st.button("📍 Get My Location", type="primary", use_container_width=True, key="get_gps"):
+                    st.session_state.location_requested = True
+                    st.rerun()
+
+            with col2:
+                if st.session_state.get('visitor_location'):
+                    loc = st.session_state['visitor_location']
+                    st.success(f"✅ Location set: {loc['lat']:.5f}, {loc['lon']:.5f}")
+
+            # AUTOMATIC GPS FETCHING - runs when button is clicked
+            if st.session_state.location_requested and not st.session_state.get('visitor_location'):
+                with st.spinner("🌍 Getting your location..."):
+                    try:
+                        # This automatically triggers browser location request
+                        loc_data = get_geolocation()
+
+                        if loc_data and 'coords' in loc_data:
+                            lat = loc_data['coords']['latitude']
+                            lon = loc_data['coords']['longitude']
+
+                            # Automatically save to session state
+                            location = {"lat": lat, "lon": lon}
+                            st.session_state["visitor_location"] = location
+                            SessionStateManager.save_user_location(lat, lon)
+                            st.session_state.location_requested = False
+
+                            st.success(f"✅ Location automatically set: {lat:.5f}, {lon:.5f}")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.error("❌ Could not get location. Please allow location access in your browser.")
+                            st.session_state.location_requested = False
+                            st.info("💡 Try the 'Search by City' tab or enter coordinates manually.")
+                    except Exception as e:
+                        st.error(f"❌ Error: {str(e)}")
+                        st.session_state.location_requested = False
+                        st.info("💡 Use alternative methods below.")
+
+            st.caption("⚠️ Your browser will ask for permission. Click 'Allow' to share your location.")
 
     with tab2:
-        st.markdown("**Enter your GPS coordinates:**")
+        st.markdown("**Search for your city:**")
 
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns([2, 1])
         with col1:
-            user_lat = st.number_input(
-                "Latitude",
-                min_value=-90.0,
-                max_value=90.0,
-                value=None,
-                format="%.6f",
-                help="Example: 28.7041 (for Delhi)",
-                key="manual_lat"
+            location_name = st.text_input(
+                "City/Location",
+                placeholder="e.g., Mumbai, Delhi, Bangalore",
+                key="city_search",
+                label_visibility="collapsed"
             )
         with col2:
-            user_lon = st.number_input(
-                "Longitude",
-                min_value=-180.0,
-                max_value=180.0,
-                value=None,
-                format="%.6f",
-                help="Example: 77.1025 (for Delhi)",
-                key="manual_lon"
-            )
+            search_clicked = st.button("🔍 Find", type="primary", use_container_width=True)
 
-        if user_lat is not None and user_lon is not None:
-            if st.button("✅ Set My Location", type="primary", use_container_width=True):
-                location = {"lat": user_lat, "lon": user_lon}
-                st.session_state["visitor_location"] = location
-                SessionStateManager.save_user_location(user_lat, user_lon)
-                st.success(f"✅ Location set: {user_lat:.5f}, {user_lon:.5f}")
-                st.rerun()
+        if search_clicked and location_name.strip():
+            with st.spinner(f"Finding {location_name}..."):
+                coords = geocode_location(location_name.strip())
+                if coords:
+                    st.session_state["visitor_location"] = coords
+                    SessionStateManager.save_user_location(coords["lat"], coords["lon"])
+                    st.success(f"✅ Found: {location_name}")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Could not find '{location_name}'")
 
     with tab3:
-        st.markdown("**📱 How to get your GPS coordinates:**")
+        st.markdown("**Enter coordinates manually:**")
 
-        st.markdown("""
-        **Method 1: Google Maps (Easiest)**
-        1. Open [Google Maps](https://www.google.com/maps) on your phone or computer
-        2. Right-click (or long-press on mobile) on your location
-        3. Click the coordinates that appear at the top
-        4. Coordinates are now copied! Paste them in the "Coordinates" tab
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            user_lat = st.number_input("Latitude", min_value=-90.0, max_value=90.0, value=None, format="%.6f", key="lat")
+        with col2:
+            user_lon = st.number_input("Longitude", min_value=-180.0, max_value=180.0, value=None, format="%.6f", key="lon")
+        with col3:
+            if user_lat is not None and user_lon is not None:
+                if st.button("✅ Set", type="primary", use_container_width=True):
+                    location = {"lat": user_lat, "lon": user_lon}
+                    st.session_state["visitor_location"] = location
+                    SessionStateManager.save_user_location(user_lat, user_lon)
+                    st.success("✅ Location set!")
+                    st.rerun()
 
-        **Method 2: Your Phone's Location**
-        - **iPhone:** Settings → Privacy → Location Services → System Services → Compass
-        - **Android:** Open Google Maps app → Tap blue dot → See coordinates at top
+        st.caption("💡 Get coordinates: Right-click on Google Maps → Click coordinates")
 
-        **Method 3: Search Your City**
-        - Use the "Search by City" tab above
-        - Enter your current city name
-        - We'll find the coordinates automatically!
-        """)
-
-        st.info("💡 **Tip:** The easiest way is to use the 'Search by City' tab and just type your city name!")
-
-    # Show current location if set
+    # Show current location status
     location = st.session_state.get("visitor_location")
     if location:
-        st.success(f"📍 **Current location set:** {location['lat']:.5f}, {location['lon']:.5f}")
-        if st.button("🗑️ Clear Location", key="clear_loc"):
-            st.session_state.pop("visitor_location", None)
-            st.rerun()
+        st.markdown("---")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.info(f"📍 **Current location:** {location['lat']:.5f}, {location['lon']:.5f}")
+        with col2:
+            if st.button("🗑️ Clear", use_container_width=True):
+                st.session_state.pop("visitor_location", None)
+                st.session_state.location_requested = False
+                st.rerun()
 
 # Interactive Map
 st.markdown("---")
-st.markdown(f"### 🗺️ Interactive Map - {html.escape(city)} Attractions")
+st.markdown(f"### 🗺️ {html.escape(city)} Attractions Map")
 
-mappable = [
-    place for place in places
-    if isinstance(place.get("lat"), (int, float))
-    and isinstance(place.get("lon"), (int, float))
-]
+mappable = [p for p in places if isinstance(p.get("lat"), (int, float)) and isinstance(p.get("lon"), (int, float))]
 
 if mappable:
-    coordinate_rows = [
+    map_data = pd.DataFrame([
         {
-            "place": place["name"],
-            "latitude": float(place["lat"]),
-            "longitude": float(place["lon"]),
+            "place": p["name"],
+            "latitude": float(p["lat"]),
+            "longitude": float(p["lon"]),
             "color": "#d66745",
             "size": 180,
         }
-        for place in mappable
-    ]
-    map_data = pd.DataFrame(coordinate_rows)
+        for p in mappable
+    ])
 
-    st.map(
-        map_data,
-        latitude="latitude",
-        longitude="longitude",
-        color="color",
-        size="size",
-        zoom=11,
-        use_container_width=True,
-    )
+    st.map(map_data, latitude="latitude", longitude="longitude", color="color", size="size", zoom=11, use_container_width=True)
 
     st.markdown("#### 📋 Attraction Coordinates")
-    coordinate_table = map_data[["place", "latitude", "longitude"]].copy()
-    coordinate_table["latitude"] = coordinate_table["latitude"].round(5)
-    coordinate_table["longitude"] = coordinate_table["longitude"].round(5)
+    coord_table = map_data[["place", "latitude", "longitude"]].copy()
+    coord_table["latitude"] = coord_table["latitude"].round(5)
+    coord_table["longitude"] = coord_table["longitude"].round(5)
     st.dataframe(
-        coordinate_table.rename(
-            columns={
-                "place": "Attraction",
-                "latitude": "Latitude",
-                "longitude": "Longitude",
-            }
-        ),
+        coord_table.rename(columns={"place": "Attraction", "latitude": "Latitude", "longitude": "Longitude"}),
         use_container_width=True,
         hide_index=True
     )
 else:
-    st.info("No attractions with valid coordinates to display on the map.")
+    st.info("No attractions with valid coordinates to display.")
 
-# Location-based features
+# Navigation & Directions
 st.markdown("---")
 
 location = st.session_state.get("visitor_location")
 
 if not location:
-    st.info("ℹ️ **Set your location above** to see distances and get navigation directions to each attraction.")
-    st.caption("💡 Tip: Use the 'Search by City' tab for the easiest way to set your location!")
+    st.info("ℹ️ Set your location above to see distances and get directions.")
 else:
-    st.markdown(f"### 🎯 Distances from Your Location")
+    st.markdown(f"### 🎯 Navigation from Your Location")
     st.caption(f"Calculating from: {location['lat']:.5f}, {location['lon']:.5f}")
 
-    st.markdown("---")
-
     for place in mappable:
-        km = calculate_haversine_distance(
-            location["lat"], location["lon"],
-            place["lat"], place["lon"]
-        )
+        km = calculate_haversine_distance(location["lat"], location["lon"], place["lat"], place["lon"])
 
         maps_url = (
-            "https://www.google.com/maps/dir/?api=1"
+            f"https://www.google.com/maps/dir/?api=1"
             f"&origin={location['lat']},{location['lon']}"
             f"&destination={place['lat']},{place['lon']}"
-            "&travelmode=driving"
+            f"&travelmode=driving"
         )
 
         with st.container(border=True):
@@ -329,18 +337,13 @@ else:
 
             with col1:
                 st.markdown(f"#### {html.escape(place['name'])}")
-                st.markdown(f"📏 **Distance:** ~{km:.1f} km from your location")
-                st.caption(f"📍 Coordinates: {place['lat']:.5f}, {place['lon']:.5f}")
+                st.markdown(f"📏 **{km:.1f} km** from your location")
+                st.caption(f"📍 {place['lat']:.5f}, {place['lon']:.5f}")
                 if place.get("source"):
-                    st.markdown(f"[📖 View on Wikipedia]({place['source']})")
+                    st.markdown(f"[📖 Wikipedia]({place['source']})")
 
             with col2:
-                st.link_button(
-                    "🧭 Get Directions",
-                    maps_url,
-                    use_container_width=True,
-                    help="Opens in Google Maps"
-                )
+                st.link_button("🧭 Directions", maps_url, use_container_width=True)
 
 st.markdown("---")
-st.info("💡 Explore **Hotels** and **Attractions** using the sidebar navigation!")
+st.info("💡 Explore **Hotels** and **Attractions** using the sidebar!")
