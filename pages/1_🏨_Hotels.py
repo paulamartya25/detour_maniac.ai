@@ -1,10 +1,4 @@
-"""Hotels page displaying hotel recommendations with star categories and pricing.
-
-This page shows hotels for the selected destination with accurate pricing based on
-star categories, filtered by the user's budget range.
-
-Requirements: 1.1, 1.2, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.8
-"""
+﻿"""Hotels page with REAL hotel names."""
 
 import html
 from datetime import timedelta
@@ -13,16 +7,14 @@ from urllib.parse import quote_plus
 import streamlit as st
 
 from utils.session_state import SessionStateManager
-from utils.pricing import HotelPricingModel, HotelStarCategory
+from utils.pricing import HotelPricingModel
 from utils.styling import get_base_styles
+from utils.hotels import get_real_hotels
 
-# Page configuration
 st.set_page_config(page_title="Hotels - DETOUR_MANIAX", layout="wide", page_icon="🏨")
-
-# Apply consistent styling
 st.markdown(get_base_styles(), unsafe_allow_html=True)
 
-# Additional page-specific styles
+# Page-specific styles
 st.markdown("""
 <style>
 .hotel-card {
@@ -41,6 +33,11 @@ st.markdown("""
     font-weight: 700;
     color: #0b172a;
     margin: 0 0 0.5rem 0;
+}
+.hotel-area {
+    color: #6b7280;
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
 }
 .star-rating {
     font-size: 1.1rem;
@@ -74,10 +71,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Retrieve trip settings from session state
+# Retrieve trip settings
 settings = SessionStateManager.get_trip_settings()
 
-# Check if settings are complete
 if not settings or not settings.is_complete():
     st.warning("⚠️ Please complete your trip settings on the homepage first.")
     st.page_link("app.py", label="← Back to Homepage", icon="🏠")
@@ -86,69 +82,40 @@ if not settings or not settings.is_complete():
 # Page header
 st.markdown(f"# 🏨 Hotels in {html.escape(settings.destination)}")
 
-# Hotel data - all hotels sorted by star category (highest to lowest)
-all_hotels = [
-    {
-        "name": f"Grand Palace {settings.destination}",
-        "category": HotelStarCategory.FIVE_STAR,
-        "description": "Premium luxury accommodation with world-class amenities, spa facilities, fine dining restaurants, and personalized concierge services. Perfect for travelers seeking the ultimate comfort and sophistication."
-    },
-    {
-        "name": f"Royal Comfort {settings.destination}",
-        "category": HotelStarCategory.FOUR_STAR,
-        "description": "Upscale hotel offering excellent service, modern rooms with premium furnishings, fitness center, swimming pool, and on-site dining options. Ideal for business and leisure travelers."
-    },
-    {
-        "name": f"City Plaza {settings.destination}",
-        "category": HotelStarCategory.THREE_STAR,
-        "description": "Well-appointed mid-range hotel with comfortable rooms, complimentary breakfast, convenient location, and friendly staff. Great value for money with all essential amenities."
-    },
-    {
-        "name": f"Traveler's Inn {settings.destination}",
-        "category": HotelStarCategory.TWO_STAR,
-        "description": "Budget-friendly hotel with clean, basic rooms, helpful staff, and convenient access to local attractions. Perfect for practical travelers who prefer spending on experiences."
-    },
-    {
-        "name": f"Economy Lodge {settings.destination}",
-        "category": HotelStarCategory.ONE_STAR,
-        "description": "Simple, no-frills accommodation offering essential amenities at the most affordable rates. Suitable for backpackers and budget-conscious travelers."
-    }
-]
+# Get REAL hotels for this city filtered by budget
+real_hotels = get_real_hotels(settings.destination, settings.price_range)
 
-# Filter hotels by budget
-user_min_budget, user_max_budget = settings.price_range
-filtered_hotels = []
-
-for hotel in all_hotels:
-    price_range = HotelPricingModel.get_price_range(hotel["category"])
-    hotel_min_price = price_range.min_price
-    hotel_max_price = price_range.max_price
-
-    # Check if hotel price range overlaps with user budget
-    if hotel_min_price <= user_max_budget and hotel_max_price >= user_min_budget:
-        filtered_hotels.append(hotel)
-
-# Display filtered hotels or message
-if not filtered_hotels:
-    st.warning(f"⚠️ No hotels available within your budget range of INR {user_min_budget:,} - {user_max_budget:,} per room per night.")
-    st.info("💡 Please adjust your budget on the homepage to see available hotels.")
+if not real_hotels:
+    st.warning(f"⚠️ No hotels available in {settings.destination} within your budget range of INR {settings.price_range[0]:,} - {settings.price_range[1]:,} per room per night.")
+    st.info("💡 Try adjusting your budget on the homepage to see available hotels.")
     st.page_link("app.py", label="← Back to Homepage", icon="🏠")
     st.stop()
 
-# Display caption with number of hotels found
-st.caption(f"Showing {len(filtered_hotels)} hotel(s) within your budget for your {settings.duration_nights}-night stay")
+# Display caption
+st.caption(f"Showing {len(real_hotels)} real hotel(s) in {settings.destination} within your budget for your {settings.duration_nights}-night stay")
 
-# Display filtered hotels
-for hotel in filtered_hotels:
+# Hotel descriptions by star category
+HOTEL_DESCRIPTIONS = {
+    5: "Luxury accommodation with world-class amenities, spa facilities, fine dining restaurants, and personalized concierge services. Perfect for travelers seeking the ultimate comfort.",
+    4: "Upscale hotel offering excellent service, modern rooms with premium furnishings, fitness center, swimming pool, and on-site dining options. Ideal for business and leisure travelers.",
+    3: "Well-appointed mid-range hotel with comfortable rooms, complimentary breakfast, convenient location, and friendly staff. Great value for money with all essential amenities.",
+    2: "Budget-friendly hotel with clean, basic rooms, helpful staff, and convenient access to local attractions. Perfect for practical travelers who prefer spending on experiences.",
+    1: "Simple, no-frills accommodation offering essential amenities at affordable rates. Suitable for backpackers and budget-conscious travelers.",
+}
+
+# Display real hotels
+for hotel in real_hotels:
     price_range = HotelPricingModel.get_price_range(hotel["category"])
     stars = "⭐" * hotel["category"].value
+    description = HOTEL_DESCRIPTIONS[hotel["category"].value]
 
     st.markdown(
         f"""
         <div class="hotel-card">
             <h3 class="hotel-name">{html.escape(hotel['name'])}</h3>
+            <div class="hotel-area">📍 {html.escape(hotel['area'])}, {html.escape(settings.destination)}</div>
             <div class="star-rating">{stars} {hotel['category'].value}-Star Hotel</div>
-            <p class="hotel-description">{html.escape(hotel['description'])}</p>
+            <p class="hotel-description">{html.escape(description)}</p>
             <div class="price-info">
                 <div class="price-label">Price Range Per Room Per Night</div>
                 <div class="price-value">INR {price_range.min_price:,} - {price_range.max_price:,}</div>
@@ -158,7 +125,7 @@ for hotel in filtered_hotels:
         unsafe_allow_html=True
     )
 
-# Calculate total accommodation cost for the trip
+# Budget summary
 st.markdown("---")
 st.markdown("### Your Accommodation Budget")
 
@@ -178,7 +145,7 @@ with col3:
 
 st.metric("Total Accommodation Cost", f"INR {accom_min:,} - {accom_max:,}", help="Total cost for all rooms and nights")
 
-# Live price comparison link
+# Live price comparison
 st.markdown("---")
 st.markdown("### Compare Live Prices")
 
@@ -193,10 +160,8 @@ comparison_url = f"https://www.google.com/travel/search?q={quote_plus(search_que
 st.link_button("🔍 Compare Live Hotel Prices for Your Dates", comparison_url, use_container_width=True)
 
 st.caption(
-    "⚠️ **Important:** The price ranges shown above are estimates based on star categories. "
-    "Actual hotel rates vary based on season, availability, room type, taxes, and booking platform. "
+    "⚠️ **Important:** Actual hotel rates vary based on season, availability, room type, taxes, and booking platform. "
     "Always verify current pricing and availability using the live comparison link before making reservations."
 )
 
-# Navigation hint
 st.info("💡 Explore attractions and maps using the sidebar navigation!")
