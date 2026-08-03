@@ -5,12 +5,8 @@ import pandas as pd
 import requests
 import streamlit as st
 
-try:
-    from streamlit_js_eval import get_geolocation
-    GEOLOCATION_AVAILABLE = True
-except ImportError:
-    GEOLOCATION_AVAILABLE = False
-    st.warning("⚠️ Installing streamlit-js-eval for GPS feature...")
+import streamlit.components.v1 as components
+GEOLOCATION_AVAILABLE = True
 
 from utils.session_state import SessionStateManager
 from utils.styling import get_base_styles
@@ -173,54 +169,88 @@ with st.container(border=True):
     with tab1:
         st.markdown("**Automatically fetch your GPS location:**")
 
-        if not GEOLOCATION_AVAILABLE:
-            st.error("❌ GPS feature requires streamlit-js-eval library")
-            st.code("pip install streamlit-js-eval")
-            st.info("After installation, restart the app to use GPS.")
-        else:
-            col1, col2 = st.columns([1, 2])
+        # Use custom HTML/JS component for reliable geolocation
+        location_html = """
+        <div style="padding: 1rem; background: rgba(255,255,255,0.9); border-radius: 12px;">
+            <button id="getLocationBtn" style="
+                background: #d66745;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: 600;
+                width: 100%;
+            ">📍 Get My Location</button>
+            <div id="locationResult" style="margin-top: 1rem; font-size: 14px;"></div>
+        </div>
+        <script>
+        const btn = document.getElementById('getLocationBtn');
+        const result = document.getElementById('locationResult');
 
-            with col1:
-                # The magic button that does everything automatically
-                if st.button("📍 Get My Location", type="primary", use_container_width=True, key="get_gps"):
-                    st.session_state.location_requested = True
-                    st.rerun()
+        btn.addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                result.innerHTML = '❌ Geolocation is not supported by your browser';
+                result.style.color = '#d32f2f';
+                return;
+            }
 
-            with col2:
-                if st.session_state.get('visitor_location'):
-                    loc = st.session_state['visitor_location']
-                    st.success(f"✅ Location set: {loc['lat']:.5f}, {loc['lon']:.5f}")
+            btn.disabled = true;
+            btn.textContent = '🌍 Getting location...';
+            result.innerHTML = '⏳ Requesting your location...';
+            result.style.color = '#666';
 
-            # AUTOMATIC GPS FETCHING - runs when button is clicked
-            if st.session_state.location_requested and not st.session_state.get('visitor_location'):
-                with st.spinner("🌍 Getting your location..."):
-                    try:
-                        # This automatically triggers browser location request
-                        loc_data = get_geolocation()
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude.toFixed(6);
+                    const lon = position.coords.longitude.toFixed(6);
+                    result.innerHTML = `✅ Location found: ${lat}, ${lon}`;
+                    result.style.color = '#2e7d32';
+                    btn.textContent = '✅ Location Set';
+                    btn.style.background = '#2e7d32';
 
-                        if loc_data and 'coords' in loc_data:
-                            lat = loc_data['coords']['latitude']
-                            lon = loc_data['coords']['longitude']
+                    // Send to Streamlit
+                    window.parent.postMessage({
+                        type: 'streamlit:setComponentValue',
+                        value: {lat: parseFloat(lat), lon: parseFloat(lon)}
+                    }, '*');
+                },
+                (error) => {
+                    let message = '';
+                    if (error.code === error.PERMISSION_DENIED) {
+                        message = '❌ Location permission denied. Please allow location access in your browser settings.';
+                    } else if (error.code === error.POSITION_UNAVAILABLE) {
+                        message = '❌ Location information unavailable. Please try again.';
+                    } else if (error.code === error.TIMEOUT) {
+                        message = '❌ Location request timed out. Please try again.';
+                    } else {
+                        message = '❌ An unknown error occurred: ' + error.message;
+                    }
+                    result.innerHTML = message;
+                    result.style.color = '#d32f2f';
+                    btn.disabled = false;
+                    btn.textContent = '📍 Try Again';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        });
+        </script>
+        """
 
-                            # Automatically save to session state
-                            location = {"lat": lat, "lon": lon}
-                            st.session_state["visitor_location"] = location
-                            SessionStateManager.save_user_location(lat, lon)
-                            st.session_state.location_requested = False
+        location_data = components.html(location_html, height=150)
 
-                            st.success(f"✅ Location automatically set: {lat:.5f}, {lon:.5f}")
-                            st.balloons()
-                            st.rerun()
-                        else:
-                            st.error("❌ Could not get location. Please allow location access in your browser.")
-                            st.session_state.location_requested = False
-                            st.info("💡 Try the 'Search by City' tab or enter coordinates manually.")
-                    except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
-                        st.session_state.location_requested = False
-                        st.info("💡 Use alternative methods below.")
+        if location_data and isinstance(location_data, dict) and 'lat' in location_data:
+            st.session_state["visitor_location"] = location_data
+            SessionStateManager.save_user_location(location_data["lat"], location_data["lon"])
+            st.success(f"✅ Location set: {location_data['lat']:.6f}, {location_data['lon']:.6f}")
+            st.rerun()
 
-            st.caption("⚠️ Your browser will ask for permission. Click 'Allow' to share your location.")
+        st.caption("⚠️ Your browser will ask for permission. Click 'Allow' to share your location.")
 
     with tab2:
         st.markdown("**Search for your city:**")
