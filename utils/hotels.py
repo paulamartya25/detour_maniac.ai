@@ -84,7 +84,7 @@ def get_real_hotels(city: str, budget_range: tuple) -> list:
         # Use city name in default hotels
         available_hotels = [
             {
-                'name': f\"{h['name']} {city}\",
+                'name': f"{h['name']} {city}",
                 'stars': h['stars'],
                 'area': h['area']
             }
