@@ -1,110 +1,172 @@
-﻿"""Real hotel data for different cities in India."""
+﻿"""Real hotel data fetched from OpenStreetMap via Overpass API."""
 
-# Real hotel chains and properties mapped by city
-REAL_HOTELS_BY_CITY = {
-    "goa": [
-        {"name": "Taj Exotica Resort & Spa Goa", "stars": 5, "area": "Benaulim"},
-        {"name": "ITC Grand Goa Resort & Spa", "stars": 5, "area": "Arossim Beach"},
-        {"name": "Park Hyatt Goa Resort and Spa", "stars": 5, "area": "Cansaulim"},
-        {"name": "Novotel Goa Dona Sylvia Resort", "stars": 4, "area": "Cavelossim Beach"},
-        {"name": "Holiday Inn Resort Goa", "stars": 4, "area": "Mobor Beach"},
-        {"name": "Lemon Tree Hotel Candolim", "stars": 3, "area": "Candolim"},
-        {"name": "Keys Select Ronil Resort", "stars": 3, "area": "Baga"},
-        {"name": "FabHotel Prime Sea Pearl", "stars": 2, "area": "Calangute"},
-        {"name": "Treebo Trend Palms Residency", "stars": 2, "area": "Panjim"},
-    ],
-    "mumbai": [
-        {"name": "The Taj Mahal Palace Mumbai", "stars": 5, "area": "Colaba"},
-        {"name": "The Oberoi Mumbai", "stars": 5, "area": "Nariman Point"},
-        {"name": "JW Marriott Mumbai Sahar", "stars": 5, "area": "Andheri East"},
-        {"name": "Hyatt Regency Mumbai", "stars": 4, "area": "Sahar"},
-        {"name": "Novotel Mumbai Juhu Beach", "stars": 4, "area": "Juhu"},
-        {"name": "Lemon Tree Premier Mumbai International Airport", "stars": 3, "area": "Andheri"},
-        {"name": "Hotel Suba Palace", "stars": 3, "area": "Colaba"},
-        {"name": "FabHotel Benz Suites Andheri", "stars": 2, "area": "Andheri West"},
-        {"name": "Treebo Trend Olive Residency", "stars": 2, "area": "Vile Parle"},
-    ],
-    "delhi": [
-        {"name": "The Leela Palace New Delhi", "stars": 5, "area": "Chanakyapuri"},
-        {"name": "The Oberoi New Delhi", "stars": 5, "area": "Zakir Hussain Marg"},
-        {"name": "ITC Maurya New Delhi", "stars": 5, "area": "Diplomatic Enclave"},
-        {"name": "Hyatt Regency Delhi", "stars": 4, "area": "Bhikaji Cama Place"},
-        {"name": "Radisson Blu Plaza Delhi Airport", "stars": 4, "area": "Mahipalpur"},
-        {"name": "Lemon Tree Premier Delhi Airport", "stars": 3, "area": "Aerocity"},
-        {"name": "Hotel Clark Greens", "stars": 3, "area": "Paharganj"},
-        {"name": "FabHotel Prime Sai Residency", "stars": 2, "area": "Karol Bagh"},
-        {"name": "Treebo Trend Green View", "stars": 2, "area": "New Delhi Railway Station"},
-    ],
-    "bangalore": [
-        {"name": "Taj West End Bangalore", "stars": 5, "area": "Race Course Road"},
-        {"name": "The Oberoi Bangalore", "stars": 5, "area": "MG Road"},
-        {"name": "ITC Gardenia Bengaluru", "stars": 5, "area": "Residency Road"},
-        {"name": "Hyatt Centric MG Road Bangalore", "stars": 4, "area": "MG Road"},
-        {"name": "Radisson Blu Bengaluru Outer Ring Road", "stars": 4, "area": "Marathahalli"},
-        {"name": "Lemon Tree Hotel Electronics City", "stars": 3, "area": "Electronic City"},
-        {"name": "Keys Select Hotel Nestor", "stars": 3, "area": "Indiranagar"},
-        {"name": "FabHotel Prime Royal Inn", "stars": 2, "area": "BTM Layout"},
-        {"name": "Treebo Trend Cyan Suites", "stars": 2, "area": "Koramangala"},
-    ],
-    "jaipur": [
-        {"name": "The Oberoi Rajvilas Jaipur", "stars": 5, "area": "Goner Road"},
-        {"name": "Taj Jai Mahal Palace Jaipur", "stars": 5, "area": "Civil Lines"},
-        {"name": "ITC Rajputana Jaipur", "stars": 5, "area": "Gopalbari"},
-        {"name": "Hyatt Regency Jaipur Mansarovar", "stars": 4, "area": "Mansarovar"},
-        {"name": "Radisson Jaipur City Center", "stars": 4, "area": "MI Road"},
-        {"name": "Lemon Tree Premier Jaipur", "stars": 3, "area": "Tonk Road"},
-        {"name": "Hotel Pearl Palace", "stars": 3, "area": "Gopal Bari"},
-        {"name": "FabHotel Marigold Bani Park", "stars": 2, "area": "Bani Park"},
-        {"name": "Treebo Trend Jaipur House", "stars": 2, "area": "Near Railway Station"},
-    ],
-}
+import requests
+import streamlit as st
+from typing import List, Dict, Tuple
 
-# Default fallback hotels for cities not in database
-DEFAULT_HOTELS = [
-    {"name": "Taj Hotel", "stars": 5, "area": "City Center"},
-    {"name": "ITC Grand", "stars": 5, "area": "Downtown"},
-    {"name": "Hyatt Regency", "stars": 4, "area": "Business District"},
-    {"name": "Radisson Blu", "stars": 4, "area": "Main Area"},
-    {"name": "Lemon Tree Hotel", "stars": 3, "area": "Central"},
-    {"name": "Keys Select", "stars": 3, "area": "City"},
-    {"name": "FabHotel", "stars": 2, "area": "Near Station"},
-    {"name": "Treebo Trend", "stars": 2, "area": "Market Area"},
-]
+# Overpass API endpoint (free, no API key needed)
+OVERPASS_API = "https://overpass-api.de/api/interpreter"
 
-def get_real_hotels(city: str, budget_range: tuple) -> list:
-    '''Get real hotel names for a city filtered by budget.'''
+def estimate_hotel_stars(tags: dict) -> int:
+    """Estimate hotel star rating from OpenStreetMap tags."""
+    # Check explicit star rating
+    if 'stars' in tags:
+        try:
+            stars = int(tags['stars'])
+            return min(max(stars, 1), 5)  # Clamp between 1-5
+        except (ValueError, TypeError):
+            pass
+
+    # Estimate based on tourism tag and name
+    tourism_type = tags.get('tourism', '').lower()
+    name = tags.get('name', '').lower()
+
+    # Luxury indicators
+    luxury_keywords = ['taj', 'oberoi', 'itc', 'leela', 'palace', 'grand', 'luxury', 'ritz', 'four seasons', 'shangri']
+    if any(keyword in name for keyword in luxury_keywords):
+        return 5
+
+    # High-end chains
+    upscale_keywords = ['hyatt', 'marriott', 'radisson', 'novotel', 'hilton', 'westin', 'sheraton', 'crowne plaza']
+    if any(keyword in name for keyword in upscale_keywords):
+        return 4
+
+    # Mid-range
+    midrange_keywords = ['lemon tree', 'keys', 'ginger', 'country inn', 'holiday inn express']
+    if any(keyword in name for keyword in midrange_keywords):
+        return 3
+
+    # Budget
+    budget_keywords = ['fab', 'treebo', 'oyo', 'zostel', 'hostel', 'lodge']
+    if any(keyword in name for keyword in budget_keywords):
+        return 2
+
+    # Default: assume 3-star for hotels, 2-star for guest houses
+    if tourism_type == 'guest_house' or 'guest house' in name:
+        return 2
+    elif tourism_type == 'hotel' or 'hotel' in name:
+        return 3
+
+    return 3  # Default
+
+@st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours
+def fetch_real_hotels_from_osm(city: str, limit: int = 20) -> List[Dict]:
+    """Fetch real hotels from OpenStreetMap for a given city."""
+    try:
+        # First, get city coordinates
+        nominatim_url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            "q": city,
+            "format": "jsonv2",
+            "limit": 1
+        }
+        headers = {"User-Agent": "detour-maniax/1.0 travel-planner"}
+
+        response = requests.get(nominatim_url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        city_data = response.json()
+
+        if not city_data:
+            return []
+
+        lat = float(city_data[0]['lat'])
+        lon = float(city_data[0]['lon'])
+
+        # Search radius: 15km around city center
+        radius = 15000
+
+        # Overpass query to find hotels
+        overpass_query = f"""
+        [out:json][timeout:25];
+        (
+          node["tourism"="hotel"](around:{radius},{lat},{lon});
+          way["tourism"="hotel"](around:{radius},{lat},{lon});
+          node["tourism"="guest_house"](around:{radius},{lat},{lon});
+          way["tourism"="guest_house"](around:{radius},{lat},{lon});
+        );
+        out body;
+        >;
+        out skel qt;
+        """
+
+        response = requests.post(
+            OVERPASS_API,
+            data=overpass_query,
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        # Parse hotels
+        hotels = []
+        seen_names = set()
+
+        for element in data.get('elements', []):
+            tags = element.get('tags', {})
+            name = tags.get('name', '').strip()
+
+            # Skip if no name or already seen
+            if not name or name in seen_names:
+                continue
+
+            seen_names.add(name)
+
+            # Extract location info
+            addr_city = tags.get('addr:city', '')
+            addr_area = tags.get('addr:suburb', '') or tags.get('addr:locality', '') or tags.get('addr:neighbourhood', '')
+
+            # Estimate star rating
+            stars = estimate_hotel_stars(tags)
+
+            hotels.append({
+                'name': name,
+                'stars': stars,
+                'area': addr_area if addr_area else (addr_city if addr_city else 'City Center'),
+                'lat': element.get('lat'),
+                'lon': element.get('lon')
+            })
+
+            if len(hotels) >= limit:
+                break
+
+        # Sort by estimated star rating (high to low)
+        hotels.sort(key=lambda h: h['stars'], reverse=True)
+
+        return hotels
+
+    except Exception as e:
+        st.warning(f"⚠️ Could not fetch live hotel data: {str(e)}")
+        return []
+
+def get_real_hotels(city: str, budget_range: Tuple[int, int]) -> List[Dict]:
+    """Get REAL hotels for a city filtered by budget."""
     from utils.pricing import HotelPricingModel, HotelStarCategory
 
-    city_key = city.lower().strip()
+    # Fetch real hotels from OpenStreetMap
+    available_hotels = fetch_real_hotels_from_osm(city, limit=30)
 
-    # Get hotels for this city, or use defaults
-    if city_key in REAL_HOTELS_BY_CITY:
-        available_hotels = REAL_HOTELS_BY_CITY[city_key]
-    else:
-        # Use city name in default hotels
-        available_hotels = [
-            {
-                'name': f"{h['name']} {city}",
-                'stars': h['stars'],
-                'area': h['area']
-            }
-            for h in DEFAULT_HOTELS
-        ]
+    if not available_hotels:
+        st.info(f"ℹ️ No real hotel data available for {city}. This could be due to limited OpenStreetMap data or API timeout.")
+        return []
 
     # Filter by budget
     user_min, user_max = budget_range
     filtered = []
 
     for hotel in available_hotels:
-        star_category = [cat for cat in HotelStarCategory if cat.value == hotel['stars']][0]
-        price_range = HotelPricingModel.get_price_range(star_category)
+        try:
+            star_category = [cat for cat in HotelStarCategory if cat.value == hotel['stars']][0]
+            price_range = HotelPricingModel.get_price_range(star_category)
 
-        # Check if hotel price overlaps with user budget
-        if price_range.min_price <= user_max and price_range.max_price >= user_min:
-            filtered.append({
-                'name': hotel['name'],
-                'category': star_category,
-                'area': hotel['area']
-            })
+            # Check if hotel price overlaps with user budget
+            if price_range.min_price <= user_max and price_range.max_price >= user_min:
+                filtered.append({
+                    'name': hotel['name'],
+                    'category': star_category,
+                    'area': hotel['area']
+                })
+        except (IndexError, KeyError):
+            continue
 
     return filtered
